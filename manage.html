@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Manage Inventory</title>
+<link rel="icon" href="logo/logo.png" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --ink:#1c1e17; --ink-soft:#3d4034; --muted:#6a6e5e; --faint:#9aa090;
+    --bg:#eef0ea; --panel:#ffffff; --line:#dadcd0; --line-soft:#e9ebe1;
+    --ribbon:#000000; --ribbon-line:#2b2b22;
+    --gold:#bd9a3c; --gold-bright:#d8b85a; --gold-deep:#8a6f22; --gold-wash:#faf3e0;
+    --good:#3f6f4a; --bad:#9a3b2f; --bad-wash:#f6e7e3;
+    --font-ui:Calibri, Arial, sans-serif;
+    --shadow:0 1px 2px rgba(28,30,23,.06),0 10px 30px rgba(28,30,23,.12);
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--font-ui);background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45}
+  button{font-family:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit;font-size:15px}
+  a{color:var(--gold-deep)}
+
+  /* Header ribbon */
+  .ribbon{background:var(--ribbon);color:#fff;border-bottom:2px solid var(--gold);padding:10px 18px;display:flex;align-items:center;gap:14px}
+  .ribbon img{height:38px;width:auto;display:block}
+  .ribbon .titles{display:flex;flex-direction:column;line-height:1.1}
+  .ribbon .ey{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-bright)}
+  .ribbon h1{margin:0;font-size:18px;font-weight:600}
+  .ribbon .spacer{flex:1}
+  .ribbon .who{font-size:13px;color:#cfd2c4;text-align:right;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:8px;font-weight:600;font-size:14px}
+  .btn:hover{border-color:var(--gold)}
+  .btn-primary{background:var(--gold);border-color:var(--gold-deep);color:#1c1410}
+  .btn-primary:hover{background:var(--gold-bright)}
+  .btn-ghost{background:transparent;border-color:var(--ribbon-line);color:#e7e9df}
+  .btn-ghost:hover{border-color:var(--gold)}
+  .btn-danger{background:var(--bad-wash);border-color:var(--bad);color:var(--bad)}
+  .btn-sm{padding:5px 10px;font-size:13px}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 80px}
+
+  /* Login */
+  .login-screen{min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:24px}
+  .login-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:30px;width:100%;max-width:380px;text-align:center}
+  .login-card img{height:52px;margin-bottom:14px}
+  .login-card h2{margin:0 0 4px;font-size:20px}
+  .login-card p.sub{margin:0 0 22px;color:var(--muted);font-size:14px}
+  .field{text-align:left;margin-bottom:14px}
+  .field label{display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:5px}
+  .field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-wash)}
+  .login-card .btn-primary{width:100%;padding:11px}
+  .msg{font-size:13px;margin-top:12px;min-height:18px}
+  .msg.error{color:var(--bad)}
+  .msg.ok{color:var(--good)}
+
+  /* Toolbar */
+  .toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:16px}
+  .tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px}
+  .tab{border:none;background:transparent;padding:7px 16px;border-radius:6px;font-weight:600;color:var(--muted)}
+  .tab.active{background:var(--ink);color:#fff}
+  .search{flex:1;min-width:180px;position:relative}
+  .search input{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .search input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-wash)}
+  .spacer{flex:1}
+  .count{color:var(--muted);font-size:13px;white-space:nowrap}
+
+  /* Table */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  thead th{text-align:left;background:#f5f6f1;color:var(--ink-soft);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:11px 12px;border-bottom:1px solid var(--line);position:sticky;top:0}
+  tbody td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  tbody tr:hover{background:#fbfcf8}
+  tbody tr:last-child td{border-bottom:none}
+  .room-code{font-weight:700}
+  .due-soon{color:var(--bad);font-weight:600}
+  .due-ok{color:var(--ink-soft)}
+  .row-actions{white-space:nowrap;text-align:right}
+  .row-actions button{margin-left:6px}
+  .cost-cell{text-align:right;font-variant-numeric:tabular-nums}
+
+  /* Empty / loading states */
+  .state{padding:48px 24px;text-align:center;color:var(--muted)}
+  .state h3{margin:0 0 6px;color:var(--ink);font-size:17px}
+  .state p{margin:0 0 16px}
+
+  /* Modal */
+  .overlay{position:fixed;inset:0;background:rgba(28,30,23,.45);display:none;align-items:flex-start;justify-content:center;padding:30px 16px;z-index:50;overflow:auto}
+  .overlay.open{display:flex}
+  .modal{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:720px;margin:auto}
+  .modal header{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .modal header h3{margin:0;font-size:18px}
+  .modal header .x{margin-left:auto;border:none;background:transparent;font-size:22px;color:var(--muted);line-height:1;padding:2px 8px}
+  .modal .body{padding:20px;max-height:64vh;overflow:auto}
+  .modal footer{display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line);background:#fbfcf8;border-radius:0 0 var(--radius) var(--radius)}
+  fieldset{border:1px solid var(--line);border-radius:8px;padding:14px;margin:0 0 16px}
+  fieldset legend{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-deep);padding:0 6px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid .full{grid-column:1 / -1}
+  .req{color:var(--bad)}
+
+  /* Toast */
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:8px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:60;font-size:14px;max-width:90vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.bad{background:var(--bad)}
+
+  /* Setup notice */
+  .notice{background:var(--gold-wash);border:1px solid var(--gold);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px}
+  .notice h3{margin:0 0 6px;font-size:16px}
+  .notice code{background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px}
+
+  @media (max-width:640px){
+    .grid{grid-template-columns:1fr}
+    .ribbon .who{display:none}
+    .hide-sm{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="ribbon">
+  <img id="appLogo" src="logo/logo.png" alt="logo" onerror="this.style.display='none'" />
+  <div class="titles">
+    <span id="collegeName" class="ey">College</span>
+    <h1 id="centreName">Inventory Management Tool</h1>
+  </div>
+  <div class="spacer"></div>
+  <div id="who" class="who"></div>
+  <button id="signOutBtn" class="btn btn-ghost btn-sm" style="display:none">Sign out</button>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login-screen" style="display:none">
+  <div class="login-card">
+    <img id="loginLogo" src="logo/logo.png" alt="logo" onerror="this.style.display='none'" />
+    <h2>Sign in to manage inventory</h2>
+    <p class="sub">Admin access only. Editors are added in your Firebase console.</p>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" placeholder="you@college.edu" />
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+    </div>
+    <button id="signInBtn" class="btn btn-primary">Sign in</button>
+    <div id="loginMsg" class="msg"></div>
+  </div>
+</div>
+
+<!-- CONFIG NEEDED -->
+<div id="configScreen" class="wrap" style="display:none">
+  <div class="notice">
+    <h3>Connect your Firebase project first</h3>
+    <p>This console needs your Firebase web config to sign in and store data. Open <code>data/firebase.json</code> and replace the placeholder values with the config from your Firebase console (Project settings → Your apps → Web app → SDK setup &amp; configuration).</p>
+    <p style="margin-bottom:0">See <code>FIREBASE_SETUP.md</code> for the full step-by-step.</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="wrap" style="display:none">
+  <div class="toolbar">
+    <div class="tabs">
+      <button class="tab active" data-tab="equipment">Equipment</button>
+      <button class="tab" data-tab="contacts">Contacts</button>
+    </div>
+    <div class="search">
+      <input id="searchBox" type="search" placeholder="Search room, equipment, faculty, department…" />
+    </div>
+    <span id="count" class="count"></span>
+    <div class="spacer hide-sm"></div>
+    <button id="importBtn" class="btn btn-sm" title="One-time: load your existing CSV files into Firebase">Import CSV</button>
+    <button id="addBtn" class="btn btn-primary btn-sm">Add equipment</button>
+  </div>
+
+  <div class="card">
+    <div id="tableMount"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="overlay" class="overlay">
+  <div class="modal">
+    <header>
+      <h3 id="modalTitle">Add equipment</h3>
+      <button class="x" id="modalClose" aria-label="Close">×</button>
+    </header>
+    <div class="body" id="modalBody"></div>
+    <footer>
+      <button class="btn" id="modalCancel">Cancel</button>
+      <button class="btn btn-primary" id="modalSave">Save</button>
+    </footer>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { getFirestore, collection, getDocs, addDoc, doc, setDoc, updateDoc, deleteDoc,
+         query, where, orderBy, writeBatch, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+/* ---------- One schema drives the form, the table, and CSV import ---------- */
+const EQUIP_FIELDS = [
+  { key:"building",            label:"Building",             csv:"Building",              group:"Location",    type:"text", required:true },
+  { key:"room",                label:"Room",                 csv:"Room",                  group:"Location",    type:"text", required:true },
+  { key:"equipment",           label:"Equipment",            csv:"Equipment",             group:"Item",        type:"text", required:true },
+  { key:"responsibleDepartment",label:"Responsible department",csv:"Responsible_Department",group:"Item",       type:"text" },
+  { key:"vendor",              label:"Vendor",               csv:"Vendor",                group:"Item",        type:"text" },
+  { key:"facultyName",         label:"Faculty / in-charge",  csv:"Faculty_Name",          group:"People",      type:"text" },
+  { key:"facultyEmail",        label:"Faculty email",        csv:"Faculty_Email",         group:"People",      type:"email" },
+  { key:"lastCalibrated",      label:"Last calibrated",      csv:"Last_Calibrated",       group:"Maintenance", type:"date" },
+  { key:"nextCalibrationDue",  label:"Next calibration due", csv:"Next_Calibration_Due",  group:"Maintenance", type:"date" },
+  { key:"amcRenewalDue",       label:"AMC renewal due",      csv:"AMC_Renewal_Due",       group:"Maintenance", type:"date" },
+  { key:"serviceDue",          label:"Service due",          csv:"Service_Due",           group:"Maintenance", type:"date" },
+  { key:"warrantyUntil",       label:"Warranty until",       csv:"Warranty_Until",        group:"Maintenance", type:"date" },
+  { key:"purchaseDate",        label:"Purchase date",        csv:"Purchase_Date",         group:"Procurement", type:"date" },
+  { key:"cost",                label:"Cost (₹)",             csv:"Cost",                  group:"Procurement", type:"number" },
+  { key:"fundingSource",       label:"Funding source",       csv:"Funding_Source",        group:"Procurement", type:"text" },
+  { key:"poLink",              label:"PO link",              csv:"PO_Link",               group:"Links",       type:"url" },
+  { key:"sopLink",             label:"SOP link",             csv:"SOP_Link",              group:"Links",       type:"url" },
+  { key:"photoLink",           label:"Photo link",           csv:"Photo_Link",            group:"Links",       type:"url" }
+];
+const CONTACT_FIELDS = [
+  { key:"building", label:"Building", csv:"Building",   group:"Location", type:"text", required:true },
+  { key:"room",     label:"Room",     csv:"Room",       group:"Location", type:"text", required:true },
+  { key:"inCharge", label:"In-charge",csv:"In-Charge",  group:"Person",   type:"text", required:true },
+  { key:"mobile",   label:"Mobile",   csv:"Mobile",     group:"Person",   type:"text" },
+  { key:"email",    label:"Email",    csv:"Email",      group:"Person",   type:"email" }
+];
+const GROUP_ORDER = ["Location","Item","Person","People","Maintenance","Procurement","Links"];
+const DATE_HINT = "dd-mm-yyyy";
+
+/* ---------- State ---------- */
+let db, auth, collegeId = "default";
+let activeTab = "equipment";
+let cache = { equipment:[], contacts:[] };
+let searchTerm = "";
+let editing = null; // {id} or null for new
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fields = () => activeTab === "equipment" ? EQUIP_FIELDS : CONTACT_FIELDS;
+const slug = (s) => String(s||"default").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"") || "default";
+
+function toast(msg, bad=false){
+  const t = $("toast"); t.textContent = msg; t.className = "toast show" + (bad?" bad":"");
+  clearTimeout(t._t); t._t = setTimeout(()=>{ t.className = "toast"; }, 2600);
+}
+
+/* ---------- Config / boot ---------- */
+async function loadJSON(path){ try { const r = await fetch(path); if(!r.ok) return null; return await r.json(); } catch { return null; } }
+
+function isPlaceholder(cfg){
+  if(!cfg) return true;
+  const v = JSON.stringify(cfg);
+  return !cfg.apiKey || /YOUR_|XXXX|PLACEHOLDER|example\.com/i.test(v);
+}
+
+async function boot(){
+  const appCfg = await loadJSON("data/config.json");
+  if(appCfg){
+    if(appCfg.collegeName){ $("collegeName").textContent = appCfg.collegeName; collegeId = slug(appCfg.collegeName); }
+    if(appCfg.centreName) $("centreName").textContent = appCfg.centreName;
+    if(appCfg.logo){ $("appLogo").src = appCfg.logo; $("loginLogo").src = appCfg.logo; }
+  }
+  const fbCfg = await loadJSON("data/firebase.json");
+  if(isPlaceholder(fbCfg)){ $("configScreen").style.display = "block"; return; }
+
+  const app = initializeApp(fbCfg);
+  auth = getAuth(app);
+  db = getFirestore(app);
+
+  onAuthStateChanged(auth, (user) => {
+    if(user){
+      $("loginScreen").style.display = "none";
+      $("app").style.display = "block";
+      $("who").textContent = user.email || "";
+      $("signOutBtn").style.display = "inline-block";
+      loadAll();
+    } else {
+      $("app").style.display = "none";
+      $("signOutBtn").style.display = "none";
+      $("who").textContent = "";
+      $("loginScreen").style.display = "flex";
+    }
+  });
+}
+
+/* ---------- Auth ---------- */
+async function doSignIn(){
+  const email = $("email").value.trim(), pass = $("password").value;
+  const m = $("loginMsg"); m.className = "msg"; m.textContent = "";
+  if(!email || !pass){ m.className="msg error"; m.textContent="Enter your email and password."; return; }
+  $("signInBtn").disabled = true;
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch(e){
+    m.className = "msg error";
+    m.textContent = /invalid|wrong|not-found|credential/i.test(e.code||e.message)
+      ? "That email and password don't match an account."
+      : "Couldn't sign in. " + (e.message || "");
+  } finally { $("signInBtn").disabled = false; }
+}
+
+/* ---------- Data load ---------- */
+async function loadAll(){
+  try {
+    const [eqSnap, coSnap] = await Promise.all([
+      getDocs(query(collection(db,"equipment"), where("collegeId","==",collegeId))),
+      getDocs(query(collection(db,"contacts"),  where("collegeId","==",collegeId)))
+    ]);
+    cache.equipment = eqSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    cache.contacts  = coSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    cache.equipment.sort(byRoom); cache.contacts.sort(byRoom);
+    render();
+  } catch(e){ toast("Couldn't load data: " + (e.message||e), true); }
+}
+const byRoom = (a,b) => (a.building+a.room+(a.equipment||a.inCharge||"")).localeCompare(b.building+b.room+(b.equipment||b.inCharge||""));
+
+/* ---------- Rendering ---------- */
+function filtered(){
+  const list = cache[activeTab];
+  if(!searchTerm) return list;
+  const t = searchTerm.toLowerCase();
+  return list.filter(r => fields().some(f => String(r[f.key]??"").toLowerCase().includes(t)));
+}
+
+function dueClass(val){
+  const d = parseDate(val); if(!d) return "due-ok";
+  const days = (d - new Date()) / 864e5;
+  return days <= 30 ? "due-soon" : "due-ok";
+}
+function parseDate(s){
+  if(!s) return null;
+  const m = String(s).trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if(m) return new Date(+m[3], +m[2]-1, +m[1]);
+  const d = new Date(s); return isNaN(d) ? null : d;
+}
+const money = (v) => { const n = Number(v); return isNaN(n)||!v ? "" : "₹" + n.toLocaleString("en-IN"); };
+
+function render(){
+  const list = filtered();
+  $("count").textContent = `${list.length} ${activeTab === "equipment" ? "items" : "rooms"}`;
+  $("addBtn").textContent = activeTab === "equipment" ? "Add equipment" : "Add contact";
+  const mount = $("tableMount");
+
+  if(cache[activeTab].length === 0){
+    mount.innerHTML = `<div class="state"><h3>No ${activeTab} yet</h3>
+      <p>Add your first record, or import your existing CSV files in one click.</p>
+      <button class="btn btn-primary" id="emptyAdd">Add ${activeTab==="equipment"?"equipment":"contact"}</button></div>`;
+    $("emptyAdd").onclick = openNew; return;
+  }
+  if(list.length === 0){
+    mount.innerHTML = `<div class="state"><h3>Nothing matches “${esc(searchTerm)}”</h3><p>Try a different room code, name, or department.</p></div>`;
+    return;
+  }
+
+  let head, rows;
+  if(activeTab === "equipment"){
+    head = `<tr><th>Room</th><th>Equipment</th><th class="hide-sm">Building</th><th class="hide-sm">Department</th><th class="hide-sm">Faculty</th><th>Next calibration</th><th class="cost-cell">Cost</th><th></th></tr>`;
+    rows = list.map(r => `<tr>
+      <td class="room-code">${esc(r.room)}</td>
+      <td>${esc(r.equipment)}</td>
+      <td class="hide-sm">${esc(r.building)}</td>
+      <td class="hide-sm">${esc(r.responsibleDepartment)}</td>
+      <td class="hide-sm">${esc(r.facultyName)}</td>
+      <td class="${dueClass(r.nextCalibrationDue)}">${esc(r.nextCalibrationDue)}</td>
+      <td class="cost-cell">${esc(money(r.cost))}</td>
+      <td class="row-actions">
+        <button class="btn btn-sm" data-edit="${esc(r.id)}">Edit</button>
+        <button class="btn btn-sm btn-danger" data-del="${esc(r.id)}">Delete</button>
+      </td></tr>`).join("");
+  } else {
+    head = `<tr><th>Room</th><th>Building</th><th>In-charge</th><th class="hide-sm">Mobile</th><th class="hide-sm">Email</th><th></th></tr>`;
+    rows = list.map(r => `<tr>
+      <td class="room-code">${esc(r.room)}</td>
+      <td>${esc(r.building)}</td>
+      <td>${esc(r.inCharge)}</td>
+      <td class="hide-sm">${esc(r.mobile)}</td>
+      <td class="hide-sm">${esc(r.email)}</td>
+      <td class="row-actions">
+        <button class="btn btn-sm" data-edit="${esc(r.id)}">Edit</button>
+        <button class="btn btn-sm btn-danger" data-del="${esc(r.id)}">Delete</button>
+      </td></tr>`).join("");
+  }
+  mount.innerHTML = `<table><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  mount.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => openEdit(b.dataset.edit));
+  mount.querySelectorAll("[data-del]").forEach(b => b.onclick = () => removeRow(b.dataset.del));
+}
+
+/* ---------- Modal form ---------- */
+function buildForm(values){
+  const groups = {};
+  fields().forEach(f => { (groups[f.group] = groups[f.group] || []).push(f); });
+  let html = "";
+  GROUP_ORDER.filter(g => groups[g]).forEach(g => {
+    html += `<fieldset><legend>${esc(g)}</legend><div class="grid">`;
+    groups[g].forEach(f => {
+      const v = esc(values[f.key] ?? "");
+      const full = (f.type === "url" || f.group === "Links") ? " full" : "";
+      const hint = f.type === "date" ? ` placeholder="${DATE_HINT}"` : (f.type==="email"?` placeholder="name@college.edu"`:"");
+      const inputType = f.type === "number" ? "number" : (f.type === "email" ? "email" : "text");
+      html += `<div class="field${full}">
+        <label>${esc(f.label)}${f.required?' <span class="req">*</span>':""}</label>
+        <input data-k="${f.key}" type="${inputType}" value="${v}"${hint} />
+      </div>`;
+    });
+    html += `</div></fieldset>`;
+  });
+  $("modalBody").innerHTML = html;
+}
+function openNew(){
+  editing = null;
+  $("modalTitle").textContent = activeTab === "equipment" ? "Add equipment" : "Add contact";
+  buildForm({});
+  $("overlay").classList.add("open");
+}
+function openEdit(id){
+  const row = cache[activeTab].find(r => r.id === id); if(!row) return;
+  editing = row;
+  $("modalTitle").textContent = activeTab === "equipment" ? "Edit equipment" : "Edit contact";
+  buildForm(row);
+  $("overlay").classList.add("open");
+}
+function closeModal(){ $("overlay").classList.remove("open"); editing = null; }
+
+async function saveModal(){
+  const data = { collegeId };
+  let missing = null;
+  $("modalBody").querySelectorAll("input[data-k]").forEach(inp => {
+    const f = fields().find(x => x.key === inp.dataset.k);
+    let val = inp.value.trim();
+    if(f.type === "number") val = val === "" ? "" : Number(val);
+    data[f.key] = val;
+    if(f.required && (val === "" || val == null)) missing = f.label;
+  });
+  if(missing){ toast(`${missing} is required.`, true); return; }
+
+  $("modalSave").disabled = true;
+  try {
+    const col = activeTab;
+    if(editing){
+      data.updatedAt = serverTimestamp();
+      await updateDoc(doc(db, col, editing.id), data);
+      toast("Saved changes.");
+    } else {
+      data.createdAt = serverTimestamp();
+      if(col === "contacts"){
+        // one contact per room: deterministic id prevents duplicates
+        const id = `${collegeId}__${slug(data.building)}__${slug(data.room)}`;
+        await setDoc(doc(db, col, id), data);
+      } else {
+        await addDoc(collection(db, col), data);
+      }
+      toast(activeTab === "equipment" ? "Equipment added." : "Contact added.");
+    }
+    closeModal();
+    await loadAll();
+  } catch(e){ toast("Couldn't save: " + (e.message||e), true); }
+  finally { $("modalSave").disabled = false; }
+}
+
+async function removeRow(id){
+  const row = cache[activeTab].find(r => r.id === id); if(!row) return;
+  const label = activeTab === "equipment" ? `${row.equipment} in ${row.room}` : `the contact for ${row.room}`;
+  if(!confirm(`Delete ${label}? This can't be undone.`)) return;
+  try { await deleteDoc(doc(db, activeTab, id)); toast("Deleted."); await loadAll(); }
+  catch(e){ toast("Couldn't delete: " + (e.message||e), true); }
+}
+
+/* ---------- One-time CSV import ---------- */
+function parseCSV(path){
+  return new Promise((res) => {
+    Papa.parse(path, { download:true, header:true, skipEmptyLines:true,
+      complete:(out)=>res(out.data || []), error:()=>res([]) });
+  });
+}
+async function importCSV(){
+  if(cache.equipment.length || cache.contacts.length){
+    if(!confirm("This loads your existing CSV files into Firebase. Records already exist — importing again may create duplicates. Continue anyway?")) return;
+  } else if(!confirm("Load data/csv/equipment.csv and data/csv/contacts.csv into Firebase now?")){ return; }
+
+  $("importBtn").disabled = true; toast("Importing…");
+  try {
+    const [eqRows, coRows] = await Promise.all([
+      parseCSV("data/csv/equipment.csv"), parseCSV("data/csv/contacts.csv")
+    ]);
+    let n = 0;
+    // Equipment: auto-id docs, batched
+    for(let i = 0; i < eqRows.length; i += 400){
+      const batch = writeBatch(db);
+      eqRows.slice(i, i+400).forEach(row => {
+        const d = { collegeId, createdAt:serverTimestamp() };
+        EQUIP_FIELDS.forEach(f => {
+          let v = (row[f.csv] ?? "").toString().trim();
+          d[f.key] = f.type === "number" ? (v===""?"":Number(v)) : v;
+        });
+        if(d.room || d.equipment){ batch.set(doc(collection(db,"equipment")), d); n++; }
+      });
+      await batch.commit();
+    }
+    // Contacts: deterministic id per room
+    for(let i = 0; i < coRows.length; i += 400){
+      const batch = writeBatch(db);
+      coRows.slice(i, i+400).forEach(row => {
+        const d = { collegeId, createdAt:serverTimestamp() };
+        CONTACT_FIELDS.forEach(f => { d[f.key] = (row[f.csv] ?? "").toString().trim(); });
+        if(d.room){ batch.set(doc(db,"contacts", `${collegeId}__${slug(d.building)}__${slug(d.room)}`), d); n++; }
+      });
+      await batch.commit();
+    }
+    toast(`Imported ${n} records.`);
+    await loadAll();
+  } catch(e){ toast("Import failed: " + (e.message||e), true); }
+  finally { $("importBtn").disabled = false; }
+}
+
+/* ---------- Wire up ---------- */
+$("signInBtn").onclick = doSignIn;
+$("password").addEventListener("keydown", e => { if(e.key === "Enter") doSignIn(); });
+$("signOutBtn").onclick = () => signOut(auth);
+$("addBtn").onclick = openNew;
+$("importBtn").onclick = importCSV;
+$("modalClose").onclick = closeModal;
+$("modalCancel").onclick = closeModal;
+$("modalSave").onclick = saveModal;
+$("overlay").addEventListener("click", e => { if(e.target === $("overlay")) closeModal(); });
+$("searchBox").addEventListener("input", e => { searchTerm = e.target.value.trim(); render(); });
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  t.classList.add("active"); activeTab = t.dataset.tab; searchTerm = ""; $("searchBox").value = ""; render();
+});
+
+boot();
+</script>
+</body>
+</html>
