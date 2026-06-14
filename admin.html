@@ -377,6 +377,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script>
 const FALLBACK = {
 "rooms": [
@@ -2529,6 +2531,41 @@ async function init(){
     Object.values(state.equipByRoom).reduce((n,a)=>n+a.length,0)+" items"+(demo?" · demo data":"");
 }
 
+// ── Firebase: live read of equipment + contacts (room locations stay in GeoJSON) ──
+let _fsReady=null;
+async function getFirestore(){
+  if(_fsReady) return _fsReady;
+  _fsReady = (async()=>{
+    if(typeof firebase==="undefined") throw new Error("Firebase SDK not loaded");
+    const r = await fetch("data/firebase.json");
+    if(!r.ok) throw new Error("firebase.json "+r.status);
+    const cfg = await r.json();
+    if(!cfg.apiKey || /YOUR_|XXXX|PLACEHOLDER|example\.com/i.test(JSON.stringify(cfg)))
+      throw new Error("Firebase not configured");
+    if(!firebase.apps.length) firebase.initializeApp(cfg);
+    return firebase.firestore();
+  })();
+  return _fsReady;
+}
+async function loadFromFirestore(){
+  const db = await getFirestore();
+  const [eqSnap, coSnap] = await Promise.all([
+    db.collection("equipment").get(),
+    db.collection("contacts").get()
+  ]);
+  const equipment = eqSnap.docs.map(d=>{ const r=d.data(); return {
+    room:r.room, building:r.building, equipment:r.equipment, po:r.poLink, photo:r.photoLink, sop:r.sopLink,
+    lastCal:r.lastCalibrated, nextCal:r.nextCalibrationDue,
+    department:r.responsibleDepartment, faculty:r.facultyName, facultyEmail:r.facultyEmail,
+    amcDue:r.amcRenewalDue, serviceDue:r.serviceDue,
+    purchased:r.purchaseDate, cost:r.cost, vendor:r.vendor,
+    warranty:r.warrantyUntil, funding:r.fundingSource };}).filter(x=>norm(x.room));
+  const contacts = coSnap.docs.map(d=>{ const r=d.data(); return {
+    room:r.room, building:r.building, inCharge:r.inCharge, mobile:r.mobile, email:r.email };}).filter(x=>norm(x.room));
+  if(!equipment.length) throw new Error("no equipment records in Firestore");
+  return {equipment, contacts};
+}
+
 async function loadLive(){
   const gjRes = await fetch("data/geojson/rooms_updated.geojson");
   if(!gjRes.ok) throw new Error("geojson "+gjRes.status);
@@ -2536,21 +2573,27 @@ async function loadLive(){
   const rooms = gj.features.map(f=>({room:f.properties.Room, floor:f.properties.Floor,
     building:f.properties.Building, lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0]}));
 
-  const eqRes = await fetch("data/csv/equipment.csv");
-  if(!eqRes.ok) throw new Error("equipment "+eqRes.status);
-  state.lastUpdated = eqRes.headers.get("last-modified");
-  const equipment = Papa.parse(await eqRes.text(),{header:true,skipEmptyLines:true}).data
-    .map(r=>({room:r.Room, building:r.Building, equipment:r.Equipment, po:r.PO_Link, photo:r.Photo_Link, sop:r.SOP_Link,
-      lastCal:r.Last_Calibrated, nextCal:r.Next_Calibration_Due,
-      department:(r.Responsible_Department||r.Department), faculty:(r.Faculty_Name||r["Faculty Name"]||r["In-Charge"]), facultyEmail:(r.Faculty_Email||r["Faculty Email"]),
-      amcDue:(r.AMC_Renewal_Due||r.AMC_Due), serviceDue:(r.Service_Due||r.Maintenance_Due),
-      purchased:r.Purchase_Date, cost:(r.Cost||r.Value), vendor:r.Vendor,
-      warranty:r.Warranty_Until, funding:(r.Funding_Source||r.Grant)})).filter(x=>norm(x.room));
-
-  const cRes = await fetch("data/csv/contacts.csv");
-  if(!cRes.ok) throw new Error("contacts "+cRes.status);
-  const contacts = Papa.parse(await cRes.text(),{header:true,skipEmptyLines:true}).data
-    .map(r=>({room:r.Room, building:r.Building, inCharge:r["In-Charge"], mobile:r.Mobile, email:r.Email})).filter(x=>norm(x.room));
+  let equipment, contacts;
+  try{
+    ({equipment, contacts} = await loadFromFirestore());
+    state.lastUpdated = new Date().toISOString();   // live data
+  }catch(err){
+    console.warn("Firestore unavailable — reading CSV instead:", err);
+    const eqRes = await fetch("data/csv/equipment.csv");
+    if(!eqRes.ok) throw new Error("equipment "+eqRes.status);
+    state.lastUpdated = eqRes.headers.get("last-modified");
+    equipment = Papa.parse(await eqRes.text(),{header:true,skipEmptyLines:true}).data
+      .map(r=>({room:r.Room, building:r.Building, equipment:r.Equipment, po:r.PO_Link, photo:r.Photo_Link, sop:r.SOP_Link,
+        lastCal:r.Last_Calibrated, nextCal:r.Next_Calibration_Due,
+        department:(r.Responsible_Department||r.Department), faculty:(r.Faculty_Name||r["Faculty Name"]||r["In-Charge"]), facultyEmail:(r.Faculty_Email||r["Faculty Email"]),
+        amcDue:(r.AMC_Renewal_Due||r.AMC_Due), serviceDue:(r.Service_Due||r.Maintenance_Due),
+        purchased:r.Purchase_Date, cost:(r.Cost||r.Value), vendor:r.Vendor,
+        warranty:r.Warranty_Until, funding:(r.Funding_Source||r.Grant)})).filter(x=>norm(x.room));
+    const cRes = await fetch("data/csv/contacts.csv");
+    if(!cRes.ok) throw new Error("contacts "+cRes.status);
+    contacts = Papa.parse(await cRes.text(),{header:true,skipEmptyLines:true}).data
+      .map(r=>({room:r.Room, building:r.Building, inCharge:r["In-Charge"], mobile:r.Mobile, email:r.Email})).filter(x=>norm(x.room));
+  }
 
   let buildings=null;
   try{ const bRes=await fetch("data/geojson/buildings.geojson"); if(bRes.ok) buildings=await bRes.json(); }catch(e){ buildings=null; }
